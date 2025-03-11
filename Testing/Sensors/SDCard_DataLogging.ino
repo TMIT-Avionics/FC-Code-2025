@@ -2,11 +2,11 @@
 #include <SD.h>
 
 // HSPI pins for ESP32
-#define HSPI_MISO   12
+#define HSPI_MISO   15
 #define HSPI_MOSI   13
 #define HSPI_SCLK   14
-#define HSPI_CS     15
-
+#define HSPI_CS     12
+#define FILE_NAME   "/helloesp.txt"
 SPIClass * hspi = NULL;
 File dataFile;
 int d = 0;
@@ -25,7 +25,7 @@ void setup() {
         return;
     }
     Serial.println("SD Card initialized successfully");
-    File dataFile = SD.open("/plsswork.txt", FILE_WRITE);
+    File dataFile = SD.open(FILE_NAME, FILE_WRITE);
     if (dataFile)
       Serial.println("LogFile created successfully");
     else
@@ -36,9 +36,10 @@ void setup() {
 }
 
 void loop() {
-    dataFile = SD.open("/plsswork.txt", FILE_APPEND);
+    dataFile = SD.open(FILE_NAME, FILE_APPEND);
     if (dataFile) {
-        dataFile.println(d);
+        String put = String(d) + "," + String(d*d) + "," + String(d*d*d) + "$/°^&*();'\"\\!@i am dhruvphalod auuu auuuu :)";
+        dataFile.println(put);
         dataFile.close();
         Serial.println("Data written successfully");
         d++;
@@ -46,5 +47,5 @@ void loop() {
         Serial.println("Error opening file");
     }
     
-    delay(1000);
+    delay(10);
 }
