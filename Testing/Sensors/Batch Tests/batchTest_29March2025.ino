@@ -6,7 +6,7 @@
  *  - SD Card Adapter
  *  - D4184-based Pyro channel
  * to implement: interrupts where possible, 
-@date 29-03-2025 | @author thrustMIT 2024-25 */
+@date 15-03-2025 | @author thrustMIT 2024-25 */
 
 #include <Wire.h>                         // Communication Protocol Library for I2C
 #include <Adafruit_Sensor.h>              // Adafruit Common Sensor Library
@@ -16,7 +16,6 @@
 #include <MS5611_SPI.h>                   // MS5611 SPI Library
 #include <SparkFun_u-blox_GNSS_v3.h>   
 SFE_UBLOX_GNSS myGNSS;                
-
 /* IMPORTANT PINOUTS
   - ADXL345 (I2C1)
       ADXL_INT      --> IO2
@@ -33,7 +32,7 @@ SFE_UBLOX_GNSS myGNSS;
 #define RXD2                  16        // RYLR998 RX
 #define TXD2                  17        // RYLR998 TX
 
-#define DATAPOINTS            14 //mpus => 3+9=12, MS=2, total=14
+#define DATAPOINTS            17 //mpus => 3+9=12, MS=2, GNSS=3, total=17
 #define myWire Wire1
 #define gnssAddress 0x42
  
@@ -128,14 +127,19 @@ void setup() {
   if (MS5611.begin() == true) {
     Serial.println("\t...MS5611 Initialized!");
   } else {
-    while(1);
+    // while(1);
+    Serial.println("Failed to find MS5611");
   }
 
   //GNSS MAX Click initialisation
-   while (myGNSS.begin(myWire, gnssAddress) == false) 
+  if(myGNSS.begin(myWire, gnssAddress) == false)
   {
-    Serial.println(F("GNSS MAX CLick not detected. Retrying..."));
+    Serial.println(F("GNSS MAX CLick not detected"));
     //delay (1000);
+  }
+  else
+  {
+    Serial.println("GNS MAX click initialised!");
   }
 
   myGNSS.setI2COutput(COM_TYPE_UBX);
@@ -180,6 +184,11 @@ void loop() {
   appendData(MS5611.getTemperature());
   appendData(MS5611.getPressure());
 
+  //GNSS Data Acquisition
+  int32_t latitude = myGNSS.getLatitude();
+  int32_t longitude = myGNSS.getLongitude();
+  int32_t altitude = myGNSS.getAltitudeMSL();
+
   // Data Transmission
   compileCollectedData();
 
@@ -219,25 +228,19 @@ void loop() {
   Serial.print(MS5611.getPressure(), 2);
   Serial.println();
 
-  //gnss
-  if (myGNSS.getPVT() == true)
-  {
-    int32_t latitude = myGNSS.getLatitude();
-    Serial.print(F("Lat: "));
-    Serial.print(latitude);
+  //GNSS
+  Serial.print(F("Lat: "));
+  Serial.print(latitude);
 
-    int32_t longitude = myGNSS.getLongitude();
-    Serial.print(F(" Long: "));
-    Serial.print(longitude);
-    Serial.print(F(" (degrees * 10^-7)"));
+  Serial.print(F(" Long: "));
+  Serial.print(longitude);
+  Serial.print(F(" (degrees * 10^-7)"));
 
-    int32_t altitude = myGNSS.getAltitudeMSL(); // Altitude above Mean Sea Level
-    Serial.print(F(" Alt: "));
-    Serial.print(altitude);
-    Serial.print(F(" (mm)"));
+  Serial.print(F(" Alt: "));
+  Serial.print(altitude);
+  Serial.print(F(" (mm)"));
 
-    Serial.println();
-  }
+  Serial.println();
 
   delay(2000);
 }
