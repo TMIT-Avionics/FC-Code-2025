@@ -295,6 +295,5 @@ void loop() {
 
   Serial.println();
 
-
-  delay(00);
+  delay(500);
 }
