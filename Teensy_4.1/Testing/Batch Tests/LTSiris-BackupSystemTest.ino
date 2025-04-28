@@ -13,10 +13,10 @@
 #define MS_SDO  12
 #define MS_SCL  13
 
-#define T_0     308.15
+#define T_0     308.15 //adjust this to temperature on that day
 #define L       0.0065
-#define P_0     101325
-#define R       8.31432
+#define P_0     101325 //adjust this to the specific sea level altitude on that day
+#define R       287 //8.31432 this must be 287, not 8.314
 #define g       9.80665
 
 typedef enum {
@@ -112,12 +112,19 @@ bool initGNSS() {
 }
 
 void getLocation (int32_t location[3]) {
-  if (myGNSS.getPVT(50) == true)
+  if (myGNSS.getPVT(300) == true) //50 is too fast, 250 and above is a decent speed, we will have to modify this later, maybe use polling? or have a counter which takes data every second or smtg, we don't need fast data for GPS, we just need accurate, cannot compromise on pressure values for this.
   {
     location[0] = myGNSS.getLatitude();
     location[1] = myGNSS.getLongitude();
     location[2] = myGNSS.getAltitudeMSL();
-  } else {
+  } 
+  else if (myGNSS.getPVT(1000) == true) // this is when fix isnt there, instea of no new data, we will get data every second, it is for testing purpose, should be changed later.
+  {
+    location[0] = myGNSS.getLatitude();
+    location[1] = myGNSS.getLongitude();
+    location[2] = myGNSS.getAltitudeMSL();
+  }
+  else {
     Serial.println("No new data...");
   }
 }
