@@ -9,19 +9,19 @@
 #define RYLR        Serial2
 #define WireGNSS    Wire // Connect using the Wire port. Change this if required
 #define gnssAddress 0x42 // The default I2C address for u-blox modules is 0x42. Change this if required
-#define FILE_NAME   "tst17may.csv"
+#define FILE_NAME   "vayuvega.csv"
 
 #define MS_CS   10
 #define MS_SDA  11
 #define MS_SDO  12
 #define MS_SCL  13
 
-#define T_0     308.15 //adjust this to temperature on that day
-#define L       0.0065
-#define P_0     101325 //adjust this to the specific sea level altitude on that day
-#define R       287 //8.31432 this must be 287, not 8.314
-#define g       9.80665
-
+#define T_0       310.15 //adjust this to temperature on that day
+#define L         0.0065
+#define P_0       101050 //adjust this to the specific sea level altitude on that day
+#define R         287 //8.31432 this must be 287, not 8.314
+#define g         9.80665
+#define ELEVATION 882
 typedef enum {
   LATITUDE,
   LONGITUDE,
@@ -30,9 +30,10 @@ typedef enum {
 
 const float ALT_MUL = (T_0/L);
 const float ALT_EXP = (R*L/g);
+const float LAUNCH_DETECTION = (5*g);
 
-#define LAUNCH_THRESHOLD              3
-#define MACH_INHIBIT_DELAY            18000
+#define LAUNCH_THRESHOLD              5
+// #define MACH_INHIBIT_DELAY            18000
 #define COASTING_THRESHOLD            3
 #define APOGEE_PRESSURE_CONDITION     1.5
 #define APOGEE_ACCL_CONDITION         2
@@ -90,7 +91,7 @@ void getADXLAccl (float accl[3]) {
 
 void flightTransition(float pressure, float lastRead, float accl[3]) {
   float lateralAccl = sqrt(accl[0]*accl[0] + accl[2]*accl[2]);
-  float verticalAccl = -accl[2];
+  float verticalAccl = accl[1];
   float totalAccl = sqrt(accl[0]*accl[0] + accl[1]*accl[1] + accl[2]*accl[2]);
   float acclAngle = atan(lateralAccl/verticalAccl);
 
@@ -102,7 +103,7 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
 
         if (count >= LAUNCH_THRESHOLD) {
           currentState = LAUNCH;
-          launchTime = millis();
+          // launchTime = millis();
           count = 0;
         }
         break;
@@ -112,14 +113,14 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
         if (pressure - APOGEE_PRESSURE_CONDITION > lastRead) count++;
         else count = 0;
 
-        if (count >= APOGEE_THRESHOLD && (millis() - launchTime > MACH_INHIBIT_DELAY)) {
+        if (count >= APOGEE_THRESHOLD /* && (millis() - launchTime > MACH_INHIBIT_DELAY)*/) {
           currentState = APOGEE;
           count = 0;
         }
         break;
       
       case APOGEE:
-        if (getAltitude(pressure) < MAIN_ALTITUDE) currentState = MAIN;
+        if (getAltitude(pressure) < (MAIN_ALTITUDE + ELEVATION)) currentState = MAIN;
         break;
 
       case MAIN:
@@ -138,7 +139,7 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
   } else {
     switch(currentState) {
       case STANDBY:
-        if (totalAccl > 5*g || pressure < lastRead) count++;
+        if (totalAccl > LAUNCH_DETECTION || pressure < lastRead) count++;
         else count = 0;
 
         if (count >= LAUNCH_THRESHOLD) {
@@ -161,7 +162,7 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
         if (pressure - APOGEE_PRESSURE_CONDITION > lastRead || fabs(verticalAccl) < APOGEE_ACCL_CONDITION) count++;
         else count = 0;
 
-        if (count >= APOGEE_THRESHOLD && (millis() - launchTime > MACH_INHIBIT_DELAY)) {
+        if (count >= APOGEE_THRESHOLD /* && (millis() - launchTime > MACH_INHIBIT_DELAY)*/) {
           currentState = APOGEE;
           launchTime = millis();
           count = 0;
@@ -169,7 +170,7 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
         break;
 
       case APOGEE:
-        if (getAltitude(pressure) < MAIN_ALTITUDE) currentState = MAIN;
+        if (getAltitude(pressure) < (MAIN_ALTITUDE + ELEVATION)) currentState = MAIN;
         break;
 
       case MAIN:
@@ -190,7 +191,6 @@ void flightTransition(float pressure, float lastRead, float accl[3]) {
 
 bool initGNSS() {
   WireGNSS.begin(); // Start I2C
-  // myGNSS.begin(WireGNSS, gnssAddress);
 
   if (!myGNSS.begin(WireGNSS, gnssAddress)) 
     return false;
@@ -235,11 +235,11 @@ String receiveRYLR() {
 }
 
 bool checkRYLR() {
-  Serial.println("Am in RYLR init");
+  // Serial.println("Am in RYLR init");
   sendRYLR("CODE START-UP");
   unsigned long timeout = millis() + 2000;
   while (!RYLR.available() && millis() < timeout){
-    Serial.println("Am waiting here");
+    // Serial.println("Am waiting here");
     delay(5);
   }
   return parseRYLR(receiveRYLR()) == "+OK";
@@ -250,16 +250,22 @@ int main () {
   RYLR.begin(57600);
   SPI.begin();
 
+  String status = "STATUS: ";
+
   if (MS5611.begin()) {
     Serial.println("MS5611 initialized");
+    status += "1";
   } else {
     Serial.println("MS5611 could not be initialized");
+    status += "0";
   }
 
   if (initADXL()) {
     Serial.println("ADXL initialized");
+    status += "1";
   } else {
     Serial.println("ADXL could not be initialized");
+    status += "0";
   }
 
   if (SD.begin(BUILTIN_SDCARD)) {
@@ -268,27 +274,36 @@ int main () {
     if (flightLog) {
       flightLog.println("Time(ms);Pressure(mbar);State");
       flightLog.flush();
+      status += "11";
     } else {
       Serial.println("Could not open log file");
+      status += "10";
     }
   } else {
     Serial.println("SD card could not be initialized");
+    status += "00";
   }
 
-  Serial.println("Am exiting SD init");
+  // Serial.println("Am exiting SD init");
 
   if (checkRYLR()) {
     Serial.println("Telemetry established");
+    status += "1";
   } else {
     Serial.println("Telemetry could not be established");
+    status += "0";
   }
 
   if (initGNSS()) {
     Serial.println(F("u-blox GNSS detected."));
+    status += "1";
   } else {
     Serial.println(F("u-blox GNSS not detected."));
+    status += "0";
   }
-
+  sendRYLR(status);
+  Serial.println(status);
+  
   float lastRead = readMSPressure(P_0 / 100.0);
   float pressure;
   int32_t loc[3];
